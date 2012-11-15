@@ -74,18 +74,20 @@ public class SearchDevicesActivity extends Activity {
 		searchThread.start();
 
 		CreateDialog dialogBuilder2 = new CreateDialog();
-		Object[] choice2 = { null, "OK", null };
+		Object[] choice2 = { null, getResources().getString(R.string.ok), null };
 		finishDialog = dialogBuilder2.showMessageDialog(this, "",
-				"Searching finished", choice2);
+				getResources().getString(R.string.dialog_finish_search),
+				choice2);
 
 		CreateDialog dialogBuilder1 = new CreateDialog() {
 			public void onNeutralButtonClick() {
 				btAdapter.cancelDiscovery();
 			}
 		};
-		Object[] choice1 = { null, "Cancel", null };
+		Object[] choice1 = { null,
+				getResources().getString(R.string.button_stop_search), null };
 		searchingDialog = dialogBuilder1.showMessageDialog(this, "",
-				"Searching...\nPress Cancel to stop searching", choice1);
+				getResources().getString(R.string.dialog_searching), choice1);
 	}
 
 	public void startConnectActivity(int pos) {
@@ -101,7 +103,7 @@ public class SearchDevicesActivity extends Activity {
 
 	public void showDevices(List<BluetoothDevice> paired) {
 		if (paired.isEmpty()) {
-			listAdapter.add("No device available");
+			listAdapter.add(getResources().getString(R.string.list_notfound));
 		}
 		for (int i = 0; i < paired.size(); ++i) {
 			listAdapter.add(getDeviceInfo(paired.get(i)));
@@ -133,18 +135,18 @@ public class SearchDevicesActivity extends Activity {
 				String action = intent.getAction();
 
 				if (action.equals(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)) {
-					unregisterReceiver(foundDevice);
-					unregisterReceiver(endDiscovery);
-
 					searchHandler.post(new Runnable() {
 						public void run() {
 							if (deviceList.isEmpty()) {
-								listAdapter.add("No device available");
+								listAdapter.add(getResources().getString(
+										R.string.list_notfound));
 							}
 							searchingDialog.dismiss();
 							finishDialog.show();
 						}
 					});
+					unregisterReceiver(foundDevice);
+					unregisterReceiver(endDiscovery);
 				}
 			}
 		};

@@ -11,7 +11,7 @@ public class Response {
 		int cmdLength = paraSize + 3;
 		int code = 0x90;
 		DeviceInfo info = new DeviceInfo();
-		
+
 		if (!Utils.validCommand(response, cmdLength, code))
 			return null;
 
@@ -56,7 +56,7 @@ public class Response {
 		date.sminute = response[7];
 		date.ssecond = response[8];
 
-		date.eyear = response[9];
+		date.eyear = year + response[9];
 		date.emonth = response[10];
 		date.eday = response[11];
 		date.ehour = response[12];

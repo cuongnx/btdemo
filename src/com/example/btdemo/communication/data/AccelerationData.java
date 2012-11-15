@@ -1,11 +1,12 @@
 package com.example.btdemo.communication.data;
 
 public class AccelerationData {
+	public static final int length = 25;
 	public long milisec;
-	public long Xadeta;
-	public long Yadeta;
-	public long Zadeta;
-	public long Xvdeta;
-	public long Yvdeta;
-	public long Zvdeta;
+	public int Xadeta;
+	public int Yadeta;
+	public int Zadeta;
+	public int Xvdeta;
+	public int Yvdeta;
+	public int Zvdeta;
 }

@@ -27,10 +27,10 @@ public class MainActivity extends Activity {
 				int state = intent
 						.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1);
 				if (state == BluetoothAdapter.STATE_ON) {
-					enableButton.setText("Disable Bluetooth");
+					enableButton.setText(R.string.button_disable);
 					turnedOnDialog();
 				} else if (state == BluetoothAdapter.STATE_OFF) {
-					enableButton.setText("Enable Bluetooth");
+					enableButton.setText(R.string.button_enable);
 					turnedOffDialog();
 				}
 			}
@@ -58,7 +58,7 @@ public class MainActivity extends Activity {
 		}
 
 		if (btAdapter.isEnabled()) {
-			enableButton.setText("Disable Bluetooth");
+			enableButton.setText(R.string.button_disable);
 		}
 
 		IntentFilter filter = new IntentFilter(
@@ -105,7 +105,8 @@ public class MainActivity extends Activity {
 	public void turnedOffDialog() {
 		CreateDialog dialogBuilder = new CreateDialog();
 		Object[] choice = { null, "OK", null };
-		dialogBuilder.showMessageDialog(this, "", "Bluetooth is off!", choice).show();
+		dialogBuilder.showMessageDialog(this, "", "Bluetooth is off!", choice)
+				.show();
 	}
 
 	public void onSearchButtonClicked(View btn) {

@@ -9,6 +9,14 @@ public class Utils {
 		return x;
 	}
 
+	public static long[] toLongArray(byte[] msg) {
+		long[] x = new long[msg.length];
+		for (int i = 0; i < msg.length; ++i) {
+			x[i] = (long) (msg[i]) & 0xFFL;
+		}
+		return x;
+	}
+
 	public static byte[] getSubarray(byte[] msg, int offset, int length) {
 		if ((offset + length) > msg.length)
 			length = msg.length - offset;
@@ -28,18 +36,18 @@ public class Utils {
 		return x;
 	}
 
-	public static int getInteger(byte[] num) {
+	public static long getInteger(byte[] num) {
 		if (num.length > 4)
 			return 0;
 
-		int x = 0;
+		long x = 0;
 		for (int i = 0; i < num.length; ++i) {
-			x += num[i] << (8 * i);
+			x |= (((long) num[i]) & 0xFFL) << (8 * i);
 		}
 		return x;
 	}
 
-	public static int getInteger(byte[] num, int offset, int length) {
+	public static long getInteger(byte[] num, int offset, int length) {
 		return getInteger(getSubarray(num, offset, length));
 	}
 
