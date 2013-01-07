@@ -5,22 +5,41 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Calendar;
 
-import com.example.btdemo.communication.messages.*;
-import com.example.btdemo.communication.data.*;
-
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.os.Bundle;
 import android.os.Handler;
+import android.util.Log;
 import android.view.Menu;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.Button;
+import android.widget.RelativeLayout;
 import android.widget.TextView;
 
+import com.example.btdemo.communication.data.AccelerationData;
+import com.example.btdemo.communication.data.Date;
+import com.example.btdemo.communication.data.DeviceInfo;
+import com.example.btdemo.communication.messages.Command;
+import com.example.btdemo.communication.messages.EventCommand;
+import com.example.btdemo.communication.messages.Response;
+import com.example.btdemo.communication.messages.Utils;
+import com.example.btdemo.customview.FishingRod;
+
 public class ConnectDeviceActivity extends Activity {
+
+	private static final int ACCELERATION_RANGE = 3;
+	private static final int ANGULAR_VELOCITY_RANGE = 3;
+	private static final int SAMPLING_INTERVAL = 100;
+	private static final int SAMPLING_NUMBER = 1;
+	private static final int ROTATE_THRES_VAL = 130000;
+	private static final int CAST_MINUS_THRES_VAL = -13000;
+	private static final int CAST_PLUS_THRES_VAL = 32000;
+	private static final int CAST_AVERAGE_THRES_VAL = 9500;
+	private static final int CAST_MIN_THRES_VAL = -5000;
+	private static final int CAST_MAX_THRES_VAL = 22000;
 
 	private BluetoothAdapter btAdapter = null;
 	private BluetoothSocket btSocket = null;
@@ -28,9 +47,10 @@ public class ConnectDeviceActivity extends Activity {
 	private OutputStream out = null;
 
 	private TextView deviceQuery;
-	private TextView dataView;
+	private RelativeLayout layout;
 	private Button connectButton;
 	private Button startButton;
+	private FishingRod rodView;
 
 	private Handler connectHandler = new Handler();
 	private volatile Thread flagCheck = null;
@@ -48,8 +68,9 @@ public class ConnectDeviceActivity extends Activity {
 				SearchDevicesActivity.EXTRA_BTDEVICE);
 
 		deviceQuery = (TextView) findViewById(R.id.deviceQuery);
-
-		dataView = (TextView) findViewById(R.id.dataView);
+		layout = (RelativeLayout) findViewById(R.id.layout);
+		rodView = new FishingRod(this);
+		layout.addView(rodView);
 
 		connectButton = (Button) findViewById(R.id.connectButton);
 		connectButton.setOnClickListener(new OnClickListener() {
@@ -73,25 +94,21 @@ public class ConnectDeviceActivity extends Activity {
 		startButton.setOnClickListener(new OnClickListener() {
 			public void onClick(View view) {
 				if (connected && (in != null) && (out != null)) {
-					if (bgMeasure == null) {
+					if (!bgMeasure.isRunning()) {
 						(bgMeasure = new MeasureThread()).start();
 					} else {
-						byte[] outBuffer = Utils.toByteArray(Command
-								.stopCommand());
-						try {
-							out.write(outBuffer);
-						} catch (IOException e) {
-							e.printStackTrace();
-						}
+						stopMeasure();
 					}
 				}
 			}
 		});
 
+		bgMeasure = new MeasureThread();
+
 		flagCheck = new Thread() {
 			public void run() {
 				while (Thread.currentThread().equals(flagCheck)) {
-					if (bgMeasure == null) {
+					if (!bgMeasure.isRunning()) {
 						connectHandler.post(new Runnable() {
 							public void run() {
 								startButton.setText(R.string.button_start);
@@ -119,7 +136,7 @@ public class ConnectDeviceActivity extends Activity {
 						});
 					}
 					try {
-						Thread.sleep(500);
+						Thread.sleep(1000);
 					} catch (InterruptedException e) {
 						e.printStackTrace();
 					}
@@ -127,6 +144,10 @@ public class ConnectDeviceActivity extends Activity {
 			}
 		};
 		flagCheck.start();
+	}
+
+	public void onCastButtonClicked(View v) {
+		rodView.castLine(500);
 	}
 
 	@Override
@@ -178,36 +199,33 @@ public class ConnectDeviceActivity extends Activity {
 
 			try {
 				btSocket.connect();
-				publishText("\nConnected!\n");
+				publishText("--> Connected!\n");
 
 				in = btSocket.getInputStream();
 				out = btSocket.getOutputStream();
 				byte[] outBuffer = Utils.toByteArray(Command
 						.retrieveDeviceInfoCommand());
 				byte[] inBuffer = sendMessage(out, outBuffer, in, 33);
+				Log.i("Setting device", "finish retrieveDeviceInfo");
 
 				DeviceInfo dev = Response.getDeviceInfoResponse(inBuffer);
 				if (dev == null) {
 					publishText("\nUnknown device");
 				} else {
-					publishText("\nDevice Name: " + dev.deviceName);
-					publishText("\nSerial Number: " + dev.serialNumber
-							+ "\nBluetooth Address: ");
-					for (byte x : dev.btaddress) {
-						if (x < 0)
-							publishText(Integer.toHexString((short) (x & 0xFF))
-									+ ":");
-						else if (x < 16)
-							publishText("0" + Integer.toHexString((short) x)
-									+ ":");
-						else
-							publishText(Integer.toHexString((short) x) + ":");
-					}
-					publishText("\nVersion: "
-							+ Integer.toString((int) dev.version)
-							+ "\n\nSetting up device.....");
+					/*
+					 * publishText("\nDevice Name: " + dev.deviceName);
+					 * publishText("\nSerial Number: " + dev.serialNumber +
+					 * "\nBluetooth Address: "); for (byte x : dev.btaddress) {
+					 * if (x < 0) publishText(Integer.toHexString((short) (x &
+					 * 0xFF)) + ":"); else if (x < 16) publishText("0" +
+					 * Integer.toHexString((short) x) + ":"); else
+					 * publishText(Integer.toHexString((short) x) + ":"); }
+					 * publishText("\nVersion: " + Integer.toString((int)
+					 * dev.version));
+					 */
+					publishText("Setting up device.....");
 					setupDevice();
-					publishText("--> Done\n"
+					publishText("--> Done!\n"
 							+ getResources().getString(R.string.separator));
 					connected = true;
 				}
@@ -223,111 +241,160 @@ public class ConnectDeviceActivity extends Activity {
 				}
 			}
 		}
+
+		public boolean setupDevice() throws IOException {
+			Calendar today = Calendar.getInstance();
+			byte[] outBuffer;
+			byte[] inBuffer = new byte[264];
+			int done;
+
+			// ==========
+			outBuffer = Utils.toByteArray(Command.setTimeCommand(
+					today.get(Calendar.YEAR), today.get(Calendar.MONTH),
+					today.get(Calendar.DATE), today.get(Calendar.HOUR_OF_DAY),
+					today.get(Calendar.MINUTE), today.get(Calendar.SECOND),
+					today.get(Calendar.MILLISECOND)));
+			do {
+				inBuffer = sendMessage(out, outBuffer, in, 4);
+				done = Response.commandResponse(Utils.getSubarray(inBuffer, 0,
+						4));
+				Log.i("debug",done==0?"a":"b");
+			} while (done != 0);
+			Log.i("Setting device", "finish setTime");
+
+			// ==========
+			outBuffer = Utils
+					.toByteArray(Command.setAtmosphereCommand(0, 0, 0));
+			do {
+				inBuffer = sendMessage(out, outBuffer, in, 4);
+				done = Response.commandResponse(Utils.getSubarray(inBuffer, 0,
+						4));
+			} while (done != 0);
+			Log.i("Setting device", "finish setAtmosphere");
+
+			// ==========
+			outBuffer = Utils.toByteArray(Command.setGeomagnetismCommand(0, 0,
+					0));
+			do {
+				inBuffer = sendMessage(out, outBuffer, in, 4);
+				done = Response.commandResponse(Utils.getSubarray(inBuffer, 0,
+						4));
+			} while (done != 0);
+			Log.i("Setting device", "finish setGeomagnetism");
+
+			// ==========
+			outBuffer = Utils.toByteArray(Command.setBatteryCommand(0, 0));
+			do {
+				inBuffer = sendMessage(out, outBuffer, in, 4);
+				done = Response.commandResponse(Utils.getSubarray(inBuffer, 0,
+						4));
+			} while (done != 0);
+			Log.i("Setting device", "finish setBattery");
+
+			// ==========
+			outBuffer = Utils.toByteArray(Command.setExcommunicationCommand(0,
+					0, 0));
+			do {
+				inBuffer = sendMessage(out, outBuffer, in, 4);
+				done = Response.commandResponse(Utils.getSubarray(inBuffer, 0,
+						4));
+			} while (done != 0);
+			Log.i("Setting device", "finish setExcommunication");
+
+			// ==========
+			outBuffer = Utils.toByteArray(Command.setExdataCommand(0, 0, 0, 0,
+					0));
+			do {
+				inBuffer = sendMessage(out, outBuffer, in, 4);
+				done = Response.commandResponse(Utils.getSubarray(inBuffer, 0,
+						4));
+			} while (done != 0);
+			Log.i("Setting device", "finish setExdata");
+
+			// ==========
+			outBuffer = Utils.toByteArray(Command
+					.setAccelerationMeasureCommand(SAMPLING_INTERVAL,
+							SAMPLING_NUMBER, 0));
+			do {
+				inBuffer = sendMessage(out, outBuffer, in, 4);
+				done = Response.commandResponse(Utils.getSubarray(inBuffer, 0,
+						4));
+			} while (done != 0);
+			Log.i("Setting device", "finish setAccelerationMeasure");
+
+			// ==========
+			outBuffer = Utils.toByteArray(Command
+					.setAccelerationRangeCommand(ACCELERATION_RANGE));
+			do {
+				inBuffer = sendMessage(out, outBuffer, in, 4);
+				done = Response.commandResponse(Utils.getSubarray(inBuffer, 0,
+						4));
+			} while (done != 0);
+			Log.i("Setting device", "finish setAccelerationRange");
+
+			return true;
+		}
+
 	}
 
 	public void stopConnection() throws IOException {
+		while (bgMeasure.isRunning()) {
+			stopMeasure();
+			try {
+				Thread.sleep(500);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
 		in = null;
 		out = null;
 		btSocket.close();
 		connected = false;
 	}
 
-	public boolean setupDevice() throws IOException {
-		Calendar today = Calendar.getInstance();
-		byte[] outBuffer;
-		byte[] inBuffer = new byte[264];
-		int done;
-
-		// ==========
-		outBuffer = Utils.toByteArray(Command.setTimeCommand(
-				today.get(Calendar.YEAR), today.get(Calendar.MONTH),
-				today.get(Calendar.DATE), today.get(Calendar.HOUR_OF_DAY),
-				today.get(Calendar.MINUTE), today.get(Calendar.SECOND),
-				today.get(Calendar.MILLISECOND)));
-		do {
-			inBuffer = sendMessage(out, outBuffer, in, 4);
-			done = Response.commandResponse(Utils.getSubarray(inBuffer, 0, 4));
-		} while (done != 0);
-
-		// ==========
-		outBuffer = Utils.toByteArray(Command.setAtmosphereCommand(0, 0, 0));
-		do {
-			inBuffer = sendMessage(out, outBuffer, in, 4);
-			done = Response.commandResponse(Utils.getSubarray(inBuffer, 0, 4));
-		} while (done != 0);
-
-		// ==========
-		outBuffer = Utils.toByteArray(Command.setGeomagnetismCommand(0, 0, 0));
-		do {
-			inBuffer = sendMessage(out, outBuffer, in, 4);
-			done = Response.commandResponse(Utils.getSubarray(inBuffer, 0, 4));
-		} while (done != 0);
-
-		// ==========
-		outBuffer = Utils.toByteArray(Command.setBatteryCommand(0, 0));
-		do {
-			inBuffer = sendMessage(out, outBuffer, in, 4);
-			done = Response.commandResponse(Utils.getSubarray(inBuffer, 0, 4));
-		} while (done != 0);
-
-		// ==========
-		outBuffer = Utils.toByteArray(Command
-				.setExcommunicationCommand(0, 0, 0));
-		do {
-			inBuffer = sendMessage(out, outBuffer, in, 4);
-			done = Response.commandResponse(Utils.getSubarray(inBuffer, 0, 4));
-		} while (done != 0);
-
-		// ==========
-		outBuffer = Utils.toByteArray(Command.setExdataCommand(0, 0, 0, 0, 0));
-		do {
-			inBuffer = sendMessage(out, outBuffer, in, 4);
-			done = Response.commandResponse(Utils.getSubarray(inBuffer, 0, 4));
-		} while (done != 0);
-
-		// ==========
-		outBuffer = Utils.toByteArray(Command.setAccelerationMeasureCommand(
-				100, 1, 0));
-		do {
-			inBuffer = sendMessage(out, outBuffer, in, 4);
-			done = Response.commandResponse(Utils.getSubarray(inBuffer, 0, 4));
-		} while (done != 0);
-
-		// ==========
-		outBuffer = Utils.toByteArray(Command.setAccelerationRangeCommand(3));
-		do {
-			inBuffer = sendMessage(out, outBuffer, in, 4);
-			done = Response.commandResponse(Utils.getSubarray(inBuffer, 0, 4));
-		} while (done != 0);
-
-		return true;
+	public void stopMeasure() {
+		byte[] outBuffer = Utils.toByteArray(Command.stopCommand());
+		try {
+			out.write(outBuffer);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 
 	class MeasureThread extends Thread {
+		private volatile boolean running;
+
+		public MeasureThread() {
+			super();
+			running = false;
+		}
+
 		public void run() {
 			try {
 				byte[] outBuffer = Utils.toByteArray(Command.startTimeCommand(
-						0, 12, 11, 13, 0, 0, 5, 0, 12, 11, 13, 0, 0, 10));
+						0, 12, 11, 13, 0, 0, 1, 0, 12, 11, 13, 0, 0, 30));
 				byte[] inBuffer = sendMessage(out, outBuffer, in, 16);
 
 				Date date = Response.getTimeResponse(inBuffer);
 				if (date == null) {
 					publishText("\n\nTime not set");
-					bgMeasure = null;
+					setRunning(false);
 				} else {
-					publishText("\n\nStart time: "
-							+ Integer.toString(date.syear) + "/"
-							+ Integer.toString(date.smonth) + "/"
-							+ Integer.toString(date.sday) + "\t"
-							+ Integer.toString(date.shour) + ":"
-							+ Integer.toString(date.sminute) + ":"
-							+ Integer.toString(date.ssecond));
-					publishText("\nEnd time: " + Integer.toString(date.eyear)
-							+ "/" + Integer.toString(date.emonth) + "/"
-							+ Integer.toString(date.eday) + "\t"
-							+ Integer.toString(date.ehour) + ":"
-							+ Integer.toString(date.eminute) + ":"
-							+ Integer.toString(date.esecond));
+					/*
+					 * publishText("\n\nStart time: " +
+					 * Integer.toString(date.syear) + "/" +
+					 * Integer.toString(date.smonth) + "/" +
+					 * Integer.toString(date.sday) + "\t" +
+					 * Integer.toString(date.shour) + ":" +
+					 * Integer.toString(date.sminute) + ":" +
+					 * Integer.toString(date.ssecond));
+					 * publishText("\nEnd time: " + Integer.toString(date.eyear)
+					 * + "/" + Integer.toString(date.emonth) + "/" +
+					 * Integer.toString(date.eday) + "\t" +
+					 * Integer.toString(date.ehour) + ":" +
+					 * Integer.toString(date.eminute) + ":" +
+					 * Integer.toString(date.esecond));
+					 */
 					readData(in);
 				}
 			} catch (IOException e) {
@@ -337,6 +404,8 @@ public class ConnectDeviceActivity extends Activity {
 		}
 
 		public void readData(InputStream in) throws IOException {
+			running = true;
+
 			byte[] inBuffer = new byte[28];
 			flushInputStream();
 
@@ -353,21 +422,7 @@ public class ConnectDeviceActivity extends Activity {
 
 						if (data == null)
 							break;
-
-						connectHandler.post(new Runnable() {
-							public void run() {
-								dataView.setText("\nTimestamp: " + data.milisec);
-								dataView.append("\n\tAcceleration");
-								dataView.append("\n\t\tX: " + data.Xadeta
-										+ "\n\t\tY: " + data.Yadeta
-										+ "\n\t\tZ: " + data.Zadeta);
-								dataView.append("\n\tAngular velocity");
-								dataView.append("\n\t\tX: " + data.Xvdeta
-										+ "\n\t\tY: " + data.Yvdeta
-										+ "\n\t\tZ: " + data.Zvdeta);
-							}
-						});
-
+						processData(data);
 						break;
 
 					case (byte) 0x81:
@@ -407,10 +462,7 @@ public class ConnectDeviceActivity extends Activity {
 
 					case (byte) 0x89:
 						in.read(inBuffer, 2, 2);
-						publishText("\n--> Measurement ends with exit code "
-								+ EventCommand.stopEvent(Utils.getSubarray(
-										inBuffer, 0, 4)));
-						bgMeasure = null;
+						setRunning(false);
 						break;
 
 					case (byte) 0x8F:
@@ -421,7 +473,60 @@ public class ConnectDeviceActivity extends Activity {
 						// writeByte(inBuffer, 28);
 					}
 				}
-			} while (Thread.currentThread().equals(bgMeasure));
+			} while (running && Thread.currentThread().equals(bgMeasure));
+		}
+
+		public void setRunning(boolean flag) {
+			running = flag;
+		}
+
+		public boolean isRunning() {
+			return running;
+		}
+
+		public void processData(final AccelerationData data) {
+			final int dAngle = calcAngle(data.Xvdeta, data.Yvdeta, data.Zvdeta);
+			final double dist = calcDistance(data.milisec, data.Xadeta,
+					data.Yadeta, data.Zadeta);
+
+			connectHandler.post(new Runnable() {
+				public void run() {
+					if (dAngle != 0) {
+						rodView.rotate(dAngle);
+					}
+					if (dist != 0) {
+						rodView.castLine(dist);
+					}
+				}
+			});
+		}
+
+		public int calcAngle(int x, int y, int z) {
+			double interpolator;
+			int max = FishingRod.MAX_ROD_ANGLE;
+			int min = FishingRod.MIN_ROD_ANGLE;
+			interpolator = (float) x / ROTATE_THRES_VAL * 2 * (max - min);
+
+			int ang = (int) (-interpolator);
+			return ang;
+		}
+
+		double maxdist = rodView.getMaxDistance();
+		long timestamp;
+
+		public double calcDistance(long time, int x, int y, int z) {
+			double dist = 0;
+
+			if (x < CAST_MIN_THRES_VAL) {
+				timestamp = time;
+			} else if (x > CAST_AVERAGE_THRES_VAL) {
+				if ((time - timestamp) < 300) {
+					dist = x / (CAST_MAX_THRES_VAL - CAST_AVERAGE_THRES_VAL)
+							* maxdist;
+				}
+			}
+
+			return dist;
 		}
 	}
 
@@ -450,25 +555,12 @@ public class ConnectDeviceActivity extends Activity {
 
 	public void onDestroy() {
 		flagCheck = null;
-		bgMeasure = null;
-		try {
-			stopConnection();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
+		if (btSocket != null)
+			try {
+				stopConnection();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 		super.onDestroy();
-	}
-
-	public void writeByte(byte[] tmp, int n) {
-		publishText("\n\n");
-		for (int i = 0; i < n; ++i) {
-			byte x = tmp[i];
-			if (x < 0)
-				publishText(Integer.toHexString((short) (x & 0xFF)) + ":");
-			else if (x < 16)
-				publishText("0" + Integer.toHexString((short) x) + ":");
-			else
-				publishText(Integer.toHexString((short) x) + ":");
-		}
 	}
 }

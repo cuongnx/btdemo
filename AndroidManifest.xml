@@ -34,7 +34,8 @@
         </activity>
         <activity
             android:name=".ConnectDeviceActivity"
-            android:label="@string/title_activity_connected_device" >
+            android:label="@string/title_activity_connected_device"
+            android:screenOrientation="sensorLandscape" >
         </activity>
     </application>
 
