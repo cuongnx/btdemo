@@ -26,6 +26,7 @@ public class FishingRod extends View {
 	public static final int MAX_SHADOW_ANGLE = 80;
 	private static final int DEFAULT_ROD_ANGLE = 45;
 
+	private static final int VIEW_PREFERRED_HEIGHT = 280;
 	private static final int ROD_PREFERRED_HEIGHT = 150;
 	private static final int ROD_PREFERRED_WIDTH = 150;
 
@@ -42,9 +43,9 @@ public class FishingRod extends View {
 	private PointF pivot;
 	private PointF dropP;
 	private PointF shadowP;
-	private int startAngle;
-	private int stopAngle;
-	private double shadowAngle;
+	private int startAngle; // degrees
+	private int stopAngle; // degrees
+	private double shadowAngle; // degrees
 	private double fishWeight = 0.05;
 
 	public FishingRod(Context context) {
@@ -55,8 +56,7 @@ public class FishingRod extends View {
 
 	public void initView(Context context) {
 		RelativeLayout.LayoutParams lp = new RelativeLayout.LayoutParams(
-				RelativeLayout.LayoutParams.WRAP_CONTENT,
-				RelativeLayout.LayoutParams.WRAP_CONTENT);
+				RelativeLayout.LayoutParams.MATCH_PARENT, VIEW_PREFERRED_HEIGHT);
 		lp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
 		lp.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
 		this.setLayoutParams(lp);
@@ -119,11 +119,39 @@ public class FishingRod extends View {
 	}
 
 	public double getMaxDistance() {
-		PointF start = new PointF();
-		start.set(this.getDefaultRodTip());
-		PointF stop = new PointF(this.getWidth(), 0);
+		double maxlength = 0;
 
-		return Math.hypot(start.x - stop.x, start.y - stop.y);
+		/*if (shadowAngle < 0) {
+			double tmp_y = LEFT_MARGIN
+					/ Math.tan(Math.toRadians(Math.abs(shadowAngle)));
+			if (tmp_y < this.getHeight()) {
+				maxlength = LEFT_MARGIN
+						/ Math.sin(Math.toRadians(Math.abs(shadowAngle)));
+			} else {
+				maxlength = this.getHeight()
+						/ Math.cos(Math.toRadians(shadowAngle));
+			}
+		} else if (shadowAngle > 0) {
+			double tmp_y = (this.getWidth() - LEFT_MARGIN)
+					/ Math.tan(Math.toRadians(shadowAngle));
+			if (tmp_y < this.getHeight()) {
+				maxlength = (this.getWidth() - LEFT_MARGIN)
+						/ Math.sin(Math.toRadians(shadowAngle));
+			} else {
+				maxlength = this.getHeight()
+						/ Math.cos(Math.toRadians(shadowAngle));
+			}
+		} else {
+			maxlength = this.getHeight();
+		}*/
+		
+		maxlength = Math.hypot(this.getWidth() - LEFT_MARGIN, this.getHeight());
+		return maxlength;
+	}
+
+	public double getMinDistance() {
+		return Math
+				.hypot(shadowP.x - LEFT_MARGIN, shadowP.y - this.getHeight());
 	}
 
 	public PointF getRodTip() {
@@ -263,6 +291,10 @@ public class FishingRod extends View {
 		if (dist > bound) {
 			dist = bound;
 		}
+		
+		if (dist < getMinDistance()) {
+			dist = getMinDistance();
+		}
 
 		double x = dist * Math.sin(Math.toRadians(shadowAngle)) + LEFT_MARGIN;
 		double y = this.getHeight() - dist
@@ -285,9 +317,7 @@ public class FishingRod extends View {
 
 			while ((Math.abs(dx) > 0.5) && (Math.abs(dy) > 0.5)) {
 				stopP.offset((float) interpolatorX, (float) interpolatorY);
-				Log.d("CastAnimationThread", "startP(" + startP.x + ","
-						+ startP.y + ") -> stopP(" + stopP.x + "," + stopP.y
-						+ ")");
+
 				postInvalidate();
 
 				dx = dropP.x - stopP.x;

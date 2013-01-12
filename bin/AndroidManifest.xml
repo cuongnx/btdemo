@@ -17,7 +17,8 @@
         android:theme="@style/AppTheme" >
         <activity
             android:name=".MainActivity"
-            android:label="@string/title_activity_main" >
+            android:label="@string/title_activity_main"
+            android:screenOrientation="sensorLandscape" >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -26,7 +27,8 @@
         </activity>
         <activity
             android:name=".SearchDevicesActivity"
-            android:label="@string/title_activity_search_devices" >
+            android:label="@string/title_activity_search_devices"
+            android:screenOrientation="sensorLandscape" >
         </activity>
         <activity
             android:name=".TestActivity"

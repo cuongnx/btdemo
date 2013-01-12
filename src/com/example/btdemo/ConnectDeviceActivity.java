@@ -9,6 +9,8 @@ import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
+import android.content.Context;
+import android.graphics.PointF;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
@@ -26,20 +28,20 @@ import com.example.btdemo.communication.messages.Command;
 import com.example.btdemo.communication.messages.EventCommand;
 import com.example.btdemo.communication.messages.Response;
 import com.example.btdemo.communication.messages.Utils;
+import com.example.btdemo.customview.FishView;
 import com.example.btdemo.customview.FishingRod;
 
 public class ConnectDeviceActivity extends Activity {
+
+	private static final int GAME_DURATION = 60;
 
 	private static final int ACCELERATION_RANGE = 3;
 	private static final int ANGULAR_VELOCITY_RANGE = 3;
 	private static final int SAMPLING_INTERVAL = 100;
 	private static final int SAMPLING_NUMBER = 1;
 	private static final int ROTATE_THRES_VAL = 130000;
-	private static final int CAST_MINUS_THRES_VAL = -13000;
-	private static final int CAST_PLUS_THRES_VAL = 32000;
-	private static final int CAST_AVERAGE_THRES_VAL = 9500;
-	private static final int CAST_MIN_THRES_VAL = -5000;
-	private static final int CAST_MAX_THRES_VAL = 22000;
+	private static final int CAST_THRES_VAL = 5000;
+	private static final int CAST_MAX_THRES_VAL = 30000;
 
 	private BluetoothAdapter btAdapter = null;
 	private BluetoothSocket btSocket = null;
@@ -51,6 +53,7 @@ public class ConnectDeviceActivity extends Activity {
 	private Button connectButton;
 	private Button startButton;
 	private FishingRod rodView;
+	private FishView fish[] = new FishView[3];
 
 	private Handler connectHandler = new Handler();
 	private volatile Thread flagCheck = null;
@@ -144,10 +147,7 @@ public class ConnectDeviceActivity extends Activity {
 			}
 		};
 		flagCheck.start();
-	}
 
-	public void onCastButtonClicked(View v) {
-		rodView.castLine(500);
 	}
 
 	@Override
@@ -249,18 +249,17 @@ public class ConnectDeviceActivity extends Activity {
 			int done;
 
 			// ==========
-			outBuffer = Utils.toByteArray(Command.setTimeCommand(
-					today.get(Calendar.YEAR), today.get(Calendar.MONTH),
-					today.get(Calendar.DATE), today.get(Calendar.HOUR_OF_DAY),
-					today.get(Calendar.MINUTE), today.get(Calendar.SECOND),
-					today.get(Calendar.MILLISECOND)));
-			do {
-				inBuffer = sendMessage(out, outBuffer, in, 4);
-				done = Response.commandResponse(Utils.getSubarray(inBuffer, 0,
-						4));
-				Log.i("debug",done==0?"a":"b");
-			} while (done != 0);
-			Log.i("Setting device", "finish setTime");
+			/*
+			 * outBuffer = Utils.toByteArray(Command.setTimeCommand(
+			 * today.get(Calendar.YEAR), today.get(Calendar.MONTH),
+			 * today.get(Calendar.DATE), today.get(Calendar.HOUR_OF_DAY),
+			 * today.get(Calendar.MINUTE), today.get(Calendar.SECOND),
+			 * today.get(Calendar.MILLISECOND))); do { inBuffer =
+			 * sendMessage(out, outBuffer, in, 4); done =
+			 * Response.commandResponse(Utils.getSubarray(inBuffer, 0, 4));
+			 * Log.i("debug",done==0?"a":"b"); } while (done != 0);
+			 * Log.i("Setting device", "finish setTime");
+			 */
 
 			// ==========
 			outBuffer = Utils
@@ -371,8 +370,11 @@ public class ConnectDeviceActivity extends Activity {
 
 		public void run() {
 			try {
+				int hour = GAME_DURATION / 3600;
+				int min = (GAME_DURATION - 3600 * hour) / 60;
+				int sec = (GAME_DURATION - 3600 * hour - 60 * min) / 60;
 				byte[] outBuffer = Utils.toByteArray(Command.startTimeCommand(
-						0, 12, 11, 13, 0, 0, 1, 0, 12, 11, 13, 0, 0, 30));
+						0, 12, 11, 13, 0, 0, 1, 0, 12, 11, 13, hour, min, sec));
 				byte[] inBuffer = sendMessage(out, outBuffer, in, 16);
 
 				Date date = Response.getTimeResponse(inBuffer);
@@ -405,6 +407,7 @@ public class ConnectDeviceActivity extends Activity {
 
 		public void readData(InputStream in) throws IOException {
 			running = true;
+			(new FishCreateThread()).start();
 
 			byte[] inBuffer = new byte[28];
 			flushInputStream();
@@ -511,18 +514,35 @@ public class ConnectDeviceActivity extends Activity {
 			return ang;
 		}
 
-		double maxdist = rodView.getMaxDistance();
-		long timestamp;
+		int current_max_x = 999999;
+		int current_min_x = -999999;
 
 		public double calcDistance(long time, int x, int y, int z) {
 			double dist = 0;
 
-			if (x < CAST_MIN_THRES_VAL) {
-				timestamp = time;
-			} else if (x > CAST_AVERAGE_THRES_VAL) {
-				if ((time - timestamp) < 300) {
-					dist = x / (CAST_MAX_THRES_VAL - CAST_AVERAGE_THRES_VAL)
-							* maxdist;
+			if (current_min_x <= -999999) {
+				if (x < CAST_THRES_VAL) {
+					current_min_x = x;
+				}
+			} else {
+				if (x < current_min_x) {
+					current_min_x = x;
+				} else {
+					if (current_max_x >= 999999) {
+						current_max_x = x;
+					} else {
+						if (current_max_x < x) {
+							current_max_x = x;
+						} else {
+							if (current_max_x > CAST_THRES_VAL) {
+								dist = rodView.getMaxDistance()
+										* (current_max_x - current_min_x)
+										/ CAST_MAX_THRES_VAL;
+								current_max_x = 999999;
+								current_min_x = -999999;
+							}
+						}
+					}
 				}
 			}
 
@@ -562,5 +582,36 @@ public class ConnectDeviceActivity extends Activity {
 				e.printStackTrace();
 			}
 		super.onDestroy();
+	}
+
+	class FishCreateThread extends Thread {
+		int count;
+
+		public FishCreateThread() {
+			super();
+		}
+
+		public void run() {
+			while (bgMeasure.isRunning()) {
+				connectHandler.post(new Runnable() {
+					public void run() {
+						createFish();
+					}
+				});
+				try {
+					Thread.sleep(3000);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+
+	}
+
+	public void createFish() {
+		FishView fish = new FishView(this, 0, (float) 0.1);
+		layout.addView(fish);
+		fish.startAnim(new PointF(1000, 200), new PointF(-100, 200), 6000);
+		Log.i("createfish", "fish created");
 	}
 }
