@@ -9,3 +9,6 @@ bin/**/*
 gen/**/*
 *.class
 assets/*
+/gen
+/assets
+/bin
