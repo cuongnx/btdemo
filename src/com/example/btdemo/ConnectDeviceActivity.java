@@ -4,12 +4,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Calendar;
+import java.util.Random;
 
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
-import android.content.Context;
 import android.graphics.PointF;
 import android.os.Bundle;
 import android.os.Handler;
@@ -34,6 +34,7 @@ import com.example.btdemo.customview.FishingRod;
 public class ConnectDeviceActivity extends Activity {
 
 	private static final int GAME_DURATION = 60;
+	private static final int FISH_NUMBER = 5;
 
 	private static final int ACCELERATION_RANGE = 3;
 	private static final int ANGULAR_VELOCITY_RANGE = 3;
@@ -53,7 +54,7 @@ public class ConnectDeviceActivity extends Activity {
 	private Button connectButton;
 	private Button startButton;
 	private FishingRod rodView;
-	private FishView fish[] = new FishView[3];
+	private FishView fish[];
 
 	private Handler connectHandler = new Handler();
 	private volatile Thread flagCheck = null;
@@ -147,7 +148,7 @@ public class ConnectDeviceActivity extends Activity {
 			}
 		};
 		flagCheck.start();
-
+		initFish();
 	}
 
 	@Override
@@ -162,6 +163,20 @@ public class ConnectDeviceActivity extends Activity {
 				deviceQuery.append(msg);
 			}
 		});
+	}
+
+	public void initFish() {
+		fish = new FishView[FISH_NUMBER];
+		fish[0] = new FishView(this, 0);
+		fish[1] = new FishView(this, 1);
+		fish[2] = new FishView(this, 2);
+		fish[3] = new FishView(this, 0);
+		fish[4] = new FishView(this, 1);
+		layout.addView(fish[0]);
+		layout.addView(fish[1]);
+		layout.addView(fish[2]);
+		layout.addView(fish[3]);
+		layout.addView(fish[4]);
 	}
 
 	class ConnectThread extends Thread {
@@ -500,6 +515,7 @@ public class ConnectDeviceActivity extends Activity {
 					if (dist != 0) {
 						rodView.castLine(dist);
 					}
+					rodView.checkCaught(fish);
 				}
 			});
 		}
@@ -585,33 +601,61 @@ public class ConnectDeviceActivity extends Activity {
 	}
 
 	class FishCreateThread extends Thread {
-		int count;
+		private Random rng;
 
 		public FishCreateThread() {
 			super();
+			rng = new Random();
 		}
 
 		public void run() {
 			while (bgMeasure.isRunning()) {
-				connectHandler.post(new Runnable() {
-					public void run() {
-						createFish();
-					}
-				});
+				makeSwim();
 				try {
-					Thread.sleep(3000);
+					Thread.sleep((long) (2500 + rng.nextFloat() * 1000));
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
 			}
 		}
 
-	}
+		public void makeSwim() {
+			final int num = rng.nextInt(FISH_NUMBER);
+			if (fish[num].getState() == FishView.FISH_FREE) {
+				int h = layout.getHeight();
+				int w = layout.getWidth();
+				int hdiff = h - rodView.getHeight();
+				final int speed = (int) (fish[num].speed + (rng.nextFloat() - 0.5) * 800);
+				final PointF start = new PointF();
+				final PointF stop = new PointF();
 
-	public void createFish() {
-		FishView fish = new FishView(this, 0, (float) 0.1);
-		layout.addView(fish);
-		fish.startAnim(new PointF(1000, 200), new PointF(-100, 200), 6000);
-		Log.i("createfish", "fish created");
+				if (rng.nextBoolean()) {
+					flipFish(num, FishView.LEFT_RIGHT);
+					start.x = -70;
+					stop.x = w + 70;
+					start.y = rng.nextInt(h - hdiff - 10) + hdiff + 10;
+					stop.y = rng.nextInt(h - hdiff - 10) + hdiff + 10;
+				} else {
+					flipFish(num, FishView.RIGHT_LEFT);
+					start.x = w + 70;
+					stop.x = -70;
+					start.y = rng.nextInt(h - hdiff - 10) + hdiff + 10;
+					stop.y = rng.nextInt(h - hdiff - 10) + hdiff + 10;
+				}
+				connectHandler.post(new Runnable() {
+					public void run() {
+						fish[num].startAnim(start, stop, speed);
+					}
+				});
+			}
+		}
+
+		public void flipFish(final int num, final int d) {
+			connectHandler.post(new Runnable() {
+				public void run() {
+					fish[num].setDirection(d);
+				}
+			});
+		}
 	}
 }

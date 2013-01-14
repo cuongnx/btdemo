@@ -19,7 +19,9 @@ import com.example.btdemo.R;
 
 public class FishingRod extends View {
 	private static final int LEFT_MARGIN = 200;
+
 	private static final int CAST_ANIMATION_DURATION = 1000;
+
 	public static final int MAX_ROD_ANGLE = 25;
 	public static final int MIN_ROD_ANGLE = -75;
 	public static final int MIN_SHADOW_ANGLE = -60;
@@ -33,12 +35,18 @@ public class FishingRod extends View {
 	public static final int ROD_ONLY_STATE = 0;
 	public static final int CAST_LINE_STATE = 1;
 	public static final int ROD_AND_LINE_STATE = 2;
+	public static final int FISH_CAUGHT_STATE = 3;
+
+	private static final double LINE_WEIGHT = 1;
+
+	private static final double FISH_SAFE_ZONE = 35;
 
 	private volatile int state;
 
 	public Bitmap rod;
 	public Paint painter;
 	private Matrix transMatrix;
+	public Bitmap fish;
 
 	private PointF pivot;
 	private PointF dropP;
@@ -46,7 +54,7 @@ public class FishingRod extends View {
 	private int startAngle; // degrees
 	private int stopAngle; // degrees
 	private double shadowAngle; // degrees
-	private double fishWeight = 0.05;
+	private double fishWeight;
 
 	public FishingRod(Context context) {
 		super(context);
@@ -82,10 +90,12 @@ public class FishingRod extends View {
 
 		painter = new Paint();
 		painter.setColor(Color.BLACK);
+		fishWeight = LINE_WEIGHT / 10;
 	}
 
 	public void setState(int state) {
 		switch (state) {
+		case FISH_CAUGHT_STATE:
 		case ROD_ONLY_STATE:
 		case CAST_LINE_STATE:
 		case ROD_AND_LINE_STATE:
@@ -106,7 +116,7 @@ public class FishingRod extends View {
 		} else if (w > 1) {
 			w = 1;
 		}
-		fishWeight = w;
+		fishWeight = w / 10;
 	}
 
 	public double getWeight() {
@@ -121,30 +131,20 @@ public class FishingRod extends View {
 	public double getMaxDistance() {
 		double maxlength = 0;
 
-		/*if (shadowAngle < 0) {
-			double tmp_y = LEFT_MARGIN
-					/ Math.tan(Math.toRadians(Math.abs(shadowAngle)));
-			if (tmp_y < this.getHeight()) {
-				maxlength = LEFT_MARGIN
-						/ Math.sin(Math.toRadians(Math.abs(shadowAngle)));
-			} else {
-				maxlength = this.getHeight()
-						/ Math.cos(Math.toRadians(shadowAngle));
-			}
-		} else if (shadowAngle > 0) {
-			double tmp_y = (this.getWidth() - LEFT_MARGIN)
-					/ Math.tan(Math.toRadians(shadowAngle));
-			if (tmp_y < this.getHeight()) {
-				maxlength = (this.getWidth() - LEFT_MARGIN)
-						/ Math.sin(Math.toRadians(shadowAngle));
-			} else {
-				maxlength = this.getHeight()
-						/ Math.cos(Math.toRadians(shadowAngle));
-			}
-		} else {
-			maxlength = this.getHeight();
-		}*/
-		
+		/*
+		 * if (shadowAngle < 0) { double tmp_y = LEFT_MARGIN /
+		 * Math.tan(Math.toRadians(Math.abs(shadowAngle))); if (tmp_y <
+		 * this.getHeight()) { maxlength = LEFT_MARGIN /
+		 * Math.sin(Math.toRadians(Math.abs(shadowAngle))); } else { maxlength =
+		 * this.getHeight() / Math.cos(Math.toRadians(shadowAngle)); } } else if
+		 * (shadowAngle > 0) { double tmp_y = (this.getWidth() - LEFT_MARGIN) /
+		 * Math.tan(Math.toRadians(shadowAngle)); if (tmp_y < this.getHeight())
+		 * { maxlength = (this.getWidth() - LEFT_MARGIN) /
+		 * Math.sin(Math.toRadians(shadowAngle)); } else { maxlength =
+		 * this.getHeight() / Math.cos(Math.toRadians(shadowAngle)); } } else {
+		 * maxlength = this.getHeight(); }
+		 */
+
 		maxlength = Math.hypot(this.getWidth() - LEFT_MARGIN, this.getHeight());
 		return maxlength;
 	}
@@ -185,6 +185,7 @@ public class FishingRod extends View {
 
 		drawRodShadow(canvas);
 		drawFishingLine(canvas);
+		drawFish(canvas);
 	}
 
 	public void drawRodShadow(Canvas canvas) {
@@ -227,6 +228,7 @@ public class FishingRod extends View {
 			case CAST_LINE_STATE:
 				// calculation done by CastAnimationThread
 				break;
+			case FISH_CAUGHT_STATE:
 			case ROD_AND_LINE_STATE:
 				startP = getRodTip();
 				stopP.set(dropP);
@@ -235,6 +237,14 @@ public class FishingRod extends View {
 				break;
 			}
 			canvas.drawLine(startP.x, startP.y, stopP.x, stopP.y, painter);
+		}
+	}
+
+	public void drawFish(Canvas canvas) {
+		if (state == FISH_CAUGHT_STATE) {
+			Log.i("drawfish", "draw");
+			canvas.drawBitmap(fish, dropP.x - fish.getWidth() / 2, dropP.y,
+					painter);
 		}
 	}
 
@@ -250,12 +260,15 @@ public class FishingRod extends View {
 			if (startAngle != stopAngle) {
 				transMatrix.setRotate(stopAngle, pivot.x, pivot.y);
 
-				if (state == ROD_AND_LINE_STATE) {
+				if ((state == ROD_AND_LINE_STATE)
+						|| (state == FISH_CAUGHT_STATE)) {
 					float dx = shadowP.x - dropP.x;
 					float dy = shadowP.y - dropP.y;
-					if ((Math.abs(dx) < 10) && (Math.abs(dy) < 10)) {
+					if ((Math.abs(dx) < FISH_SAFE_ZONE)
+							&& (Math.abs(dy) < FISH_SAFE_ZONE)) {
 						dropP.set(shadowP);
 						setState(ROD_ONLY_STATE);
+						fishCaught();
 					} else {
 						dropP.offset((float) (dx * fishWeight),
 								(float) (dy * fishWeight));
@@ -269,9 +282,12 @@ public class FishingRod extends View {
 	}
 
 	public void castLine(double dist) {
-		setState(CAST_LINE_STATE);
-		dropP = calcDropPoint(dist);
-		(new CastAnimationThread()).start();
+		if (getState() == FISH_CAUGHT_STATE) {
+		} else {
+			setState(CAST_LINE_STATE);
+			dropP = calcDropPoint(dist);
+			(new CastAnimationThread()).start();
+		}
 	}
 
 	private PointF calcDropPoint(double dist) {
@@ -291,7 +307,7 @@ public class FishingRod extends View {
 		if (dist > bound) {
 			dist = bound;
 		}
-		
+
 		if (dist < getMinDistance()) {
 			dist = getMinDistance();
 		}
@@ -332,5 +348,41 @@ public class FishingRod extends View {
 			postInvalidate();
 			setState(ROD_AND_LINE_STATE);
 		}
+	}
+
+	public void setFish(Bitmap f) {
+		if (f == null) {
+			setState(ROD_AND_LINE_STATE);
+		}
+		this.fish = f;
+		setState(FISH_CAUGHT_STATE);
+	}
+
+	public void checkCaught(FishView fish[]) {
+		if (state == ROD_AND_LINE_STATE) {
+			for (int i = 0; i < fish.length; ++i) {
+				if (fish[i].getState() == FishView.FISH_SWIMMING) {
+					PointF p = fish[i].getCurrentPosition();
+					int w = fish[i].getWidth();
+					int h = fish[i].getHeight();
+					int diff = ((View) this.getParent()).getHeight()
+							- this.getHeight();
+					if (Math.hypot(dropP.x - p.x - w / 2, dropP.y + diff - p.y
+							- h / 2) < FISH_SAFE_ZONE) {
+						fish[i].stopAnim();
+						fish[i].setState(FishView.FISH_FREE);
+						this.setState(FISH_CAUGHT_STATE);
+						this.setWeight(fish[i].fishWeight);
+						this.setFish(fish[i].getCaughtBitmap());
+						break;
+					}
+				}
+			}
+		}
+	}
+
+	public void fishCaught() {
+		setWeight(LINE_WEIGHT);
+		fish = null;
 	}
 }
